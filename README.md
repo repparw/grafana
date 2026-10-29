@@ -8,7 +8,6 @@ This repository contains dashboard resources for the Grafana Cloud Git Sync inte
 - GitHub App credentials and live service tokens remain SOPS-encrypted in [repparw/nix](https://github.com/repparw/nix).
 - Dashboard edits from Cloud should be proposed as pull requests; merges to `main` are picked up by the existing Git Sync connection after it has been switched to this repository.
 
-## Cutover
+## Operations
 
-Do **not** enable a second repository syncing the same dashboard UIDs in parallel.
-Update existing `fleet-dashboards` repository in Grafana Cloud to use `https://github.com/repparw/grafana`, branch `main`, path `dashboards/`, preserving the existing `fleet-github` connection and branch workflow. Verify dashboard UID `fleet-overview` and live alert counts before removing the old dashboard copy in `repparw/nix`.
+[Grafana Cloud operations](docs/operations.md) covers Git Sync settings, alerts and notification policy, the automated Epsilon configuration backup, and recovery. For fleet-side Alloy and monitoring configuration, see the [Nix repository](https://github.com/repparw/nix).
