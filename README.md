@@ -8,7 +8,6 @@ This repository contains dashboard resources for the Grafana Cloud Git Sync inte
 - GitHub App credentials and live service tokens remain SOPS-encrypted in [repparw/nix](https://github.com/repparw/nix).
 - Dashboard edits from Cloud should be proposed as pull requests; merges to `main` are picked up by the existing Git Sync connection after it has been switched to this repository.
 
-## Cutover
+## Validation
 
-Do **not** enable a second repository syncing the same dashboard UIDs in parallel.
-Update existing `fleet-dashboards` repository in Grafana Cloud to use `https://github.com/repparw/grafana`, branch `main`, path `dashboards/`, preserving the existing `fleet-github` connection and branch workflow. Verify dashboard UID `fleet-overview` and live alert counts before removing the old dashboard copy in `repparw/nix`.
+`tests/dashboard_queries.py` reads the actual Git-synced dashboard and builds Prometheus query regression cases covering missing telemetry, CPU usage, filtered network interfaces, filesystem calculations and failed services. The dashboard workflow runs these using `promtool test rules` on pushes and pull requests. Host-side Alloy/monitoring tests remain in `repparw/nix`.

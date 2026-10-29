@@ -1,0 +1,24 @@
+name: Dashboard PromQL regression
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  promql:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Validate Grafana dashboard JSON and generate PromQL cases
+        run: |
+          python3 -m json.tool dashboards/fleet-overview.json > /dev/null
+          python3 tests/dashboard_queries.py > "$RUNNER_TEMP/dashboard-tests.json"
+      - name: Validate PromQL behavior against Prometheus
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y prometheus
+          promtool test rules "$RUNNER_TEMP/dashboard-tests.json"
