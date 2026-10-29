@@ -69,7 +69,22 @@ The archive is
 It includes dashboards, folders and permissions, alert rules, contact points
 **with decrypted secrets**, notification policies/templates, mute timings and
 datasource metadata. Restic retains previous versions. Export failures preserve
-the prior archive and mark the offsite run incomplete.
+the prior archive rather than replacing it with an incomplete one.
+
+**Verify export completeness separately from Restic service status.** A snapshot
+may upload successfully even when the Grafana export failed. Check the
+`grafana-cloud-state` entry in
+`/var/lib/backup-exports/offsite.json`, the Grafana export journal, and the
+archive's modification time:
+
+```sh
+sudo python3 -m json.tool /var/lib/backup-exports/offsite.json
+sudo journalctl -u grafana-cloud-backup.service -n 50 --no-pager
+sudo stat -c '%y %n' /var/lib/grafana-cloud-backup/grafana-cloud-state.tar.gz
+```
+
+Confirm the latest report marks the Grafana export complete and the archive was
+refreshed for that run. A successful Restic upload alone is insufficient.
 
 **Treat exports as secrets.** Never commit them or webhook URLs to Git. The
 export is a sequence of API reads, not an atomic snapshot; avoid editing Cloud
@@ -80,23 +95,37 @@ The backup token expires **2027-10-26** and must be rotated beforehand.
 
 ## Restore configuration
 
-A full restore is currently a *manual, ordered recovery procedure*, not a
-single tested command. Work from a private Restic-restored archive:
+**Full restoration has not been round-trip tested.** The archive's hashes have
+been verified, but restore fidelity—including permissions, contact-point
+secrets, alert behavior and notification delivery—has not been demonstrated.
+The tested `gcx` v1.7.1 export was incomplete and redacted contact-point
+secrets, so it is not a drop-in replacement or a verified one-command restore.
+
+Recovery currently requires an ordered, manual procedure. Work from a private
+Restic-restored archive:
 
 1. Verify file hashes against `manifest.json`. Do not expose decrypted contact
    point settings in logs or public files.
-2. Restore folders and their permissions, then dashboards through Git Sync or
-   Grafana's dashboard API. Preserve UIDs. Recover datasource credentials
-   separately; `datasources.json` contains only metadata.
-3. Restore alert rules from `alert-rules-api.json` with the provisioning API.
-   Use `X-Disable-Provenance: true` for UI-editable rules. The separately exported
-   provisioning-format resources are **not** interchangeable with API payloads.
-4. Restore contact points, notification templates, mute timings, and finally
-   notification policies. Keep alert evaluation paused until destinations and
-   queries have been checked.
-5. Verify dashboard queries, datasource connectivity, alert-rule counts and
-   actual notification delivery before resuming the intended rules.
+2. Recreate the `fleet-github` Git Sync connection separately using the
+   GitHub App key from Nix SOPS. Reattach `fleet-dashboards` to this repository
+   without creating a second owner for the same dashboard. Restore folders,
+   folder permissions and dashboards through Git Sync or native APIs while
+   preserving UIDs. Verify dashboard permissions independently.
+3. Recover datasource credentials separately; `datasources.json` is metadata
+   only. Organization users and RBAC also require separate recovery.
+4. Restore alert rules from `alert-rules-api.json` with the provisioning API,
+   using `X-Disable-Provenance: true` where UI editing should remain possible.
+   Export-format files and provisioning API request bodies are **different**.
+5. Restore contact points, templates, mute timings and finally notification
+   policies. The `contact-points.json` file is an export-format document:
+   convert it to the API's expected payload shape before restoring. Ensure
+   decrypted settings are present; **never treat redacted secrets as recovered
+   credentials**. Keep alert evaluation paused until destinations and queries
+   have been checked.
+6. Verify dashboard queries, datasource connectivity, alert-rule counts,
+   permissions and actual notification delivery before resuming the intended
+   rules.
 
-Recreate private GitHub App credentials from Nix SOPS when needed; never commit
-the private key. Test recovery on disposable resources rather than overwriting
-live alerting just to exercise the process.
+Test recovery on disposable resources rather than overwriting live alerting.
+Until a complete round-trip is proven, do not describe this archive as a
+verified one-command restore.
