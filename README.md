@@ -91,7 +91,10 @@ export is a sequence of API reads, not an atomic snapshot; avoid editing Cloud
 settings during an export. It excludes metrics/log history, datasource secrets,
 organization users/RBAC and GitHub App credentials. Keep the App recovery key
 and backup token in [Nix SOPS](https://github.com/repparw/nix), not here.
-The backup token expires **2027-10-26** and must be rotated beforehand.
+When rotating the backup token, deploy Epsilon and verify a complete, fresh
+Grafana export before revoking the previous token. Check the active token's
+expiration and permissions in Grafana Cloud rather than relying on a hardcoded
+date in this README.
 
 ## Restore configuration
 
