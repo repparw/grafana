@@ -38,9 +38,9 @@ not require a NixOS deployment.
 - The **Grafana Cloud Alerts** contact point sends Discord notifications.
   Preview firing, recovery and mixed-severity notifications after template edits.
   Recovery is a separate message, not deletion of the original.
-- Failed-unit alerts use `fleet_failed_unit`, with a zero-valued host baseline
-  from `fleet_health_collection_timestamp_seconds`. This lets the final failed
-  unit resolve while separate collector-staleness alerts detect missing facts.
+- Use `fleet_failed_unit` for failed-unit alerts, with a zero-valued
+  host baseline from `fleet_health_collection_timestamp_seconds`. This allows
+  the last failed unit to resolve; collector-staleness alerts handle missing facts.
 - Alpha may be intentionally offline, so its absence needs its own uptime policy.
   After changing scrape targets or labels, check active-series usage in
   `grafanacloud-usage`. Disk thresholds are configured in
