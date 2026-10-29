@@ -1,29 +1,25 @@
 # Grafana Cloud
 
-This repository versions Grafana Cloud dashboards via Git Sync and documents
-Cloud configuration and recovery. NixOS fleet collection, credentials and
-offsite backup services live in [repparw/nix](https://github.com/repparw/nix).
-
-Stack: `https://repparw.grafana.net`. Edit dashboards and alerting in Cloud.
-Nix owns Alloy, collection filters, native health facts, private service probes,
-and encrypted credentials. See the [fleet monitoring runbook](https://github.com/repparw/nix/blob/main/docs/runbooks/monitoring.md) for collection checks.
+Manage dashboards and alerts in [Grafana Cloud](https://repparw.grafana.net).
+This repository versions Git-synced dashboards and documents Cloud recovery.
+NixOS collection, credentials, and offsite backups are maintained in
+[repparw/nix](https://github.com/repparw/nix); see its
+[fleet monitoring runbook](https://github.com/repparw/nix/blob/main/docs/runbooks/monitoring.md)
+for Alloy and telemetry diagnostics.
 
 ## Dashboards in Git
 
-[Dashboard resources](dashboards/)
-are maintained in the standalone public `repparw/grafana` repository.
-Preserve each dashboard `metadata.name` and UID so URLs and links remain stable.
-The dashboard UID is `fleet-overview`; datasource UIDs are the live Cloud
-UIDs, including `grafanacloud-prom`, `grafanacloud-logs` and
-`grafanacloud-usage`. Do not maintain a second dashboard in this NixOS repo.
+[Dashboard resources](dashboards/) are the source for Git Sync. Preserve
+`metadata.name` and dashboard UIDs to keep links stable. The fleet dashboard
+UID is `fleet-overview`; datasource UIDs refer to the live Cloud stack.
+Do not duplicate dashboards in the Nix repository.
 
-The existing Grafana Cloud Git Sync repository `fleet-dashboards` uses
-`repparw/grafana`, branch `main`, path `dashboards/`, through the
-repository-scoped `fleet-github` GitHub App connection. Keep PR workflows
-and five-minute polling with webhooks disabled. Public integration metadata
-lives in [connection.json](connection.json)
-and [repository.json](repository.json).
-The App key and backup credentials remain SOPS-encrypted in [repparw/nix](https://github.com/repparw/nix).
+The Grafana Cloud Git Sync repository `fleet-dashboards` tracks
+`repparw/grafana` on `main`, path `dashboards/`, using the `fleet-github`
+GitHub App connection. It uses PR workflows and five-minute polling; webhooks
+are disabled. The public integration manifests are [connection.json](connection.json)
+and [repository.json](repository.json). Private credentials remain SOPS-encrypted
+in [repparw/nix](https://github.com/repparw/nix).
 
 Cloud UI dashboard changes should produce GitHub PRs. Verify live sync
 status, UID and panel behavior following changes. Never enable a second Git
@@ -46,19 +42,15 @@ The **Grafana Cloud Alerts** contact point delivers to Discord. Preview firing,
 recovery and mixed-severity cases before changing templates. Grafana sends a
 separate recovery message; it does not delete the firing message.
 
-The failed-unit rule fires on `fleet_failed_unit`, one series per failed loaded
-unit or retained job, so a grouped message names each unit. Its query also
-returns a zero-valued host baseline from `fleet_health_collection_timestamp_seconds`
-when no units fail. This avoids a No Data result after the last failed unit
-recovers: Grafana can then resolve the disappeared alert instance through its
-MissingSeries handling (normally after two evaluations). The separate collector
+Failed-unit alerting should use `fleet_failed_unit` (one series per failed
+unit) plus a zero-valued host baseline from
+`fleet_health_collection_timestamp_seconds`. This lets the last failed unit
+resolve without turning a healthy host into No Data. A separate collector
 staleness alert covers missing host facts.
 
-The dashboard derives failed counts via `count by (host) (fleet_failed_unit)`,
-zero-filled for healthy reporting hosts. Historical `fleet_failed_units` and
-node-exporter samples remain fallbacks. The collector temporarily continues to
-emit the legacy `fleet_failed_units` gauge so the existing live Cloud alert
-stays functional until its query is migrated. Remove that gauge afterward.
+The dashboard counts `fleet_failed_unit` by host, with a zero baseline for
+healthy hosts. The old `fleet_failed_units` gauge and node-exporter fallback
+are no longer part of the dashboard query.
 
 Keep collection's series budget separate from alert policy. Check actual usage
 in `grafanacloud-usage` after adding metrics or labels. Disk facts and their
@@ -66,8 +58,8 @@ host-specific thresholds remain in [`modules.monitoring.health.disks`](https://g
 
 ## Private configuration backups
 
-Epsilon's [`grafana-cloud-backup.service`](https://github.com/repparw/nix/blob/main/modules/aspects/monitoring-cloud-state.nix) exports configuration immediately before
-its ordinary offsite Restic run. There is no second backup schedule. Manual
+Epsilon's [`grafana-cloud-backup.service`](https://github.com/repparw/nix/blob/main/modules/aspects/monitoring-cloud-state.nix)
+exports configuration immediately before its ordinary offsite Restic run. There is no second backup schedule. Manual
 `systemctl start restic-backups-offsite.service` runs the same export/upload path.
 For an export without uploading, start `grafana-cloud-backup.service` alone.
 
@@ -89,8 +81,9 @@ recreating the connection, pass the base64-encoded private key as
 
 The service account `fleet-state-backup` has no basic organization role and
 read-only resource roles, including permission to export contact-point secrets.
-Its token is SOPS-encrypted in [the Nix repository](https://github.com/repparw/nix/blob/main/secrets/grafana-cloud-epsilon.sops.yaml) as
-`grafana-cloud-backup-token`; rotate it before expiry on 2027-10-26. Agent
+Its `grafana-cloud-backup-token` is SOPS-encrypted in
+[the Nix repository](https://github.com/repparw/nix/blob/main/secrets/grafana-cloud-epsilon.sops.yaml);
+rotate it before expiry on 2027-10-26. Agent
 metrics/log write credentials remain separate and unchanged.
 
 ## Restore configuration
