@@ -1,106 +1,102 @@
 # Grafana Cloud
 
-Manage dashboards and alerts in [Grafana Cloud](https://repparw.grafana.net).
-This repository versions Git-synced dashboards and documents Cloud recovery.
-NixOS collection, credentials, and offsite backups are maintained in
-[repparw/nix](https://github.com/repparw/nix); see its
-[fleet monitoring runbook](https://github.com/repparw/nix/blob/main/docs/runbooks/monitoring.md)
-for Alloy and telemetry diagnostics.
+Cloud stack: [repparw.grafana.net](https://repparw.grafana.net).
 
-## Dashboards in Git
+This repository versions dashboards edited in the Grafana Cloud UI. Fleet-side
+Alloy collection, credentials and automated backups live in [repparw/nix](https://github.com/repparw/nix);
+see its [monitoring runbook](https://github.com/repparw/nix/blob/main/docs/runbooks/monitoring.md).
 
-[Dashboard resources](dashboards/) are the source for Git Sync. Preserve
-`metadata.name` and dashboard UIDs to keep links stable. The fleet dashboard
-UID is `fleet-overview`; datasource UIDs refer to the live Cloud stack.
-Do not duplicate dashboards in the Nix repository.
+## Dashboard Git Sync
 
-The Grafana Cloud Git Sync repository `fleet-dashboards` tracks
-`repparw/grafana` on `main`, path `dashboards/`, using the `fleet-github`
-GitHub App connection. It uses PR workflows and five-minute polling; webhooks
-are disabled. The public integration manifests are [connection.json](connection.json)
-and [repository.json](repository.json). Private credentials remain SOPS-encrypted
-in [repparw/nix](https://github.com/repparw/nix).
+The existing Grafana Cloud repository `fleet-dashboards` uses:
 
-Cloud UI dashboard changes should produce GitHub PRs. Verify live sync
-status, UID and panel behavior following changes. Never enable a second Git
-Sync owner for the same dashboard UID.
+- **GitHub:** `repparw/grafana`, branch `main`, path `dashboards/`, folderless target
+- **Connection:** `fleet-github` GitHub App
+- **Workflow:** pull requests; polling every five minutes, webhooks disabled
 
-Git Sync covers dashboards and folders, not alerts or notification settings.
-The latter remain Cloud-managed and privately backed up as described below.
+Edit dashboards in the Cloud UI, review the resulting GitHub PR, and merge to
+`main`. Keep `metadata.name` and dashboard UIDs stable (the fleet dashboard is
+`fleet-overview`). After changes, check sync status and panel behavior.
+
+The synced files are in [dashboards/](dashboards/). [connection.json](connection.json)
+and [repository.json](repository.json) document the integration but live outside
+the synced path; they are not automatically applied to Cloud. Do not configure
+another repository to manage the same dashboard UID.
+
+**Git Sync does not cover this stack's alerts, contact points, notification
+policies or templates.** Those are edited directly in Cloud and backed up
+privately as described below.
 
 ## Alerts and notifications
 
-Cloud is authoritative for rules, contact points, notification policies and
-notification templates. Editing alerting does not require a fleet deployment.
+Cloud owns the alert rules and notification configuration; editing them does
+not require a NixOS deployment.
 
-Keep ordinary health rules at **Keep Last State** for evaluation errors and
-No Data. **Cloud metrics query availability** separately reports datasource
-errors; query failure must not masquerade as host or disk failure. Alpha can
-shut down intentionally, so its absence needs a separate uptime policy.
+- Keep ordinary health alerts at **Keep Last State** for query errors and No Data.
+  The separate **Cloud metrics query availability** alert reports datasource
+  failures instead of treating them as host or disk failures.
+- The **Grafana Cloud Alerts** contact point sends Discord notifications.
+  Preview firing, recovery and mixed-severity notifications after template edits.
+  Recovery is a separate message, not deletion of the original.
+- Failed-unit alerts use `fleet_failed_unit`, with a zero-valued host baseline
+  from `fleet_health_collection_timestamp_seconds`. This lets the final failed
+  unit resolve while separate collector-staleness alerts detect missing facts.
+- Alpha may be intentionally offline, so its absence needs its own uptime policy.
+  After changing scrape targets or labels, check active-series usage in
+  `grafanacloud-usage`. Disk thresholds are configured in
+  [Nix](https://github.com/repparw/nix/blob/main/modules/aspects/monitoring-health.nix).
 
-The **Grafana Cloud Alerts** contact point delivers to Discord. Preview firing,
-recovery and mixed-severity cases before changing templates. Grafana sends a
-separate recovery message; it does not delete the firing message.
-
-Failed-unit alerting should use `fleet_failed_unit` (one series per failed
-unit) plus a zero-valued host baseline from
-`fleet_health_collection_timestamp_seconds`. This lets the last failed unit
-resolve without turning a healthy host into No Data. A separate collector
-staleness alert covers missing host facts.
-
-The dashboard counts `fleet_failed_unit` by host, with a zero baseline for
-healthy hosts. The old `fleet_failed_units` gauge and node-exporter fallback
-are no longer part of the dashboard query.
-
-Keep collection's series budget separate from alert policy. Check actual usage
-in `grafanacloud-usage` after adding metrics or labels. Disk facts and their
-host-specific thresholds remain in [`modules.monitoring.health.disks`](https://github.com/repparw/nix/blob/main/modules/aspects/monitoring-health.nix).
-
-## Private configuration backups
+## Automated private backup
 
 Epsilon's [`grafana-cloud-backup.service`](https://github.com/repparw/nix/blob/main/modules/aspects/monitoring-cloud-state.nix)
-exports configuration immediately before its ordinary offsite Restic run. There is no second backup schedule. Manual
-`systemctl start restic-backups-offsite.service` runs the same export/upload path.
-For an export without uploading, start `grafana-cloud-backup.service` alone.
+exports Cloud configuration before its scheduled encrypted offsite Restic backup.
+There is no separate Grafana backup timer.
 
-The verified archive is `/var/lib/grafana-cloud-backup/grafana-cloud-state.tar.gz`.
-It includes dashboards, folders and their permissions, datasource metadata,
-alert rules, contact points with decrypted secrets, policies, templates and mute
-timings. Restic retains previous versions. Failed exports preserve the previous
-archive and mark the overall backup incomplete while available data uploads.
+To run the export and offsite backup manually on Epsilon:
 
-Treat the archive as secret: its directory is mode 0700, files are 0600, and
-Restic encrypts the offsite copy. Never commit exports or webhook URLs to Git.
-API reads are sequential, not an atomic snapshot; avoid editing configuration
-during a recovery export. This backs up configuration, not metrics or logs.
-Datasource secrets, organization users/RBAC and GitHub App private credentials
-are not recoverable from these APIs. The GitHub App recovery key and IDs are
-SOPS-encrypted as `grafana-git-sync-app` in the Epsilon credential file. When
-recreating the connection, pass the base64-encoded private key as
-`secure.privateKey.create`; do not put it in the public connection specification.
+```sh
+sudo systemctl start --wait restic-backups-offsite.service
+```
 
-The service account `fleet-state-backup` has no basic organization role and
-read-only resource roles, including permission to export contact-point secrets.
-Its `grafana-cloud-backup-token` is SOPS-encrypted in
-[the Nix repository](https://github.com/repparw/nix/blob/main/secrets/grafana-cloud-epsilon.sops.yaml);
-rotate it before expiry on 2027-10-26. Agent
-metrics/log write credentials remain separate and unchanged.
+For a local export without an offsite upload:
+
+```sh
+sudo systemctl start --wait grafana-cloud-backup.service
+```
+
+The archive is
+`/var/lib/grafana-cloud-backup/grafana-cloud-state.tar.gz`.
+It includes dashboards, folders and permissions, alert rules, contact points
+**with decrypted secrets**, notification policies/templates, mute timings and
+datasource metadata. Restic retains previous versions. Export failures preserve
+the prior archive and mark the offsite run incomplete.
+
+**Treat exports as secrets.** Never commit them or webhook URLs to Git. The
+export is a sequence of API reads, not an atomic snapshot; avoid editing Cloud
+settings during an export. It excludes metrics/log history, datasource secrets,
+organization users/RBAC and GitHub App credentials. Keep the App recovery key
+and backup token in [Nix SOPS](https://github.com/repparw/nix), not here.
+The backup token expires **2027-10-26** and must be rotated beforehand.
 
 ## Restore configuration
 
-1. Restore the archive from Epsilon's Restic repository to a private directory.
-2. Verify the SHA-256 file hashes in `manifest.json` before using the JSON files.
-3. Restore folders and permissions, then dashboards using native Grafana APIs
-   or Git Sync. Keep existing UIDs. Cloud-managed datasource credentials must
-   be recovered separately; `datasources.json` contains metadata only.
-4. Restore alert rules from `alert-rules-api.json` using the provisioning API;
-   use `X-Disable-Provenance: true` to retain UI editing. Native export-format
-   copies are also included, but are not interchangeable with API payloads.
-5. Restore contact points from their decrypted export, templates, mute timings,
-   and finally the policy tree. Keep alert evaluation paused until destinations
-   and queries have been checked; resume only the intended rules.
-6. Check dashboard queries, rule count, datasource availability and actual
-   notification delivery. Restore tokens from SOPS rather than terminal history.
+A full restore is currently a *manual, ordered recovery procedure*, not a
+single tested command. Work from a private Restic-restored archive:
 
-Use a disposable dashboard for recovery validation; do not overwrite live rules
-merely to test a backup.
+1. Verify file hashes against `manifest.json`. Do not expose decrypted contact
+   point settings in logs or public files.
+2. Restore folders and their permissions, then dashboards through Git Sync or
+   Grafana's dashboard API. Preserve UIDs. Recover datasource credentials
+   separately; `datasources.json` contains only metadata.
+3. Restore alert rules from `alert-rules-api.json` with the provisioning API.
+   Use `X-Disable-Provenance: true` for UI-editable rules. The separately exported
+   provisioning-format resources are **not** interchangeable with API payloads.
+4. Restore contact points, notification templates, mute timings, and finally
+   notification policies. Keep alert evaluation paused until destinations and
+   queries have been checked.
+5. Verify dashboard queries, datasource connectivity, alert-rule counts and
+   actual notification delivery before resuming the intended rules.
+
+Recreate private GitHub App credentials from Nix SOPS when needed; never commit
+the private key. Test recovery on disposable resources rather than overwriting
+live alerting just to exercise the process.
