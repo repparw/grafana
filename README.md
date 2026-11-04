@@ -1,5 +1,23 @@
 # Grafana Cloud
 
+Monitoring and operational documentation for a small, self-managed Linux fleet.
+This repository versions Grafana dashboards through GitHub pull requests, while
+the related [NixOS configuration](https://github.com/repparw/nix) manages
+collectors, credentials, and encrypted backups.
+
+## What this demonstrates
+
+- **Dashboard management:** Git-backed Grafana Cloud dashboards, pull-request
+  review, and stable dashboard identities.
+- **Observability:** Fleet health monitoring with Grafana Alloy and
+  service-level health indicators.
+- **Alert operations:** Explicit treatment of failed units, missing telemetry,
+  and datasource failures to avoid misleading alerts.
+- **Recovery:** Automated exports of Grafana Cloud configuration before
+  encrypted Restic backups, with verification and recovery notes.
+
+The remaining sections document the actual setup and operational procedures.
+
 Cloud stack: [repparw.grafana.net](https://repparw.grafana.net).
 
 This repository versions dashboards edited in the Grafana Cloud UI. Fleet-side
