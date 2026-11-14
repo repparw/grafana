@@ -33,8 +33,11 @@ Cloud owns the alert rules and notification configuration; editing them does
 not require a NixOS deployment.
 
 The [headless reboot stuck alert specification](alerts/fleet-reboot-stuck.md)
-documents the 26-hour Pi/Epsilon rule. This file is **not** synchronized to
-Grafana Cloud: the rule must be created and verified in the Cloud UI or API.
+documents the 26-hour Pi/Epsilon rule. The
+[fleet deployment failure alert](alerts/fleet-deployment-failed.md)
+uses durable last-attempt metrics from the controller to detect failed or
+stalled unattended deployments. Neither rule is synchronized to Grafana Cloud:
+they must be created and verified in the Cloud UI or API.
 
 - Keep ordinary health alerts at **Keep Last State** for query errors and No Data.
   The separate **Cloud metrics query availability** alert reports datasource
