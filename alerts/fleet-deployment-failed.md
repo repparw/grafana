@@ -16,7 +16,8 @@ Alloy textfile collector:
   derived from the atomic status file's modification time.
 
 They come from `/var/lib/auto-update/last-attempt-status`, which survives
-reboots. Missing metrics before the first deployment are expected. Selective
+reboots. Only the host owning `fleet-deploy.service` publishes these series,
+so the query follows the controller without hardcoding `host="pi"`. Missing metrics before the first deployment are expected. Selective
 host deployments do not change the full-fleet result. An interrupted full-fleet
 deployment retains state `2` until a subsequent full-fleet attempt.
 
@@ -28,15 +29,15 @@ metrics datasource, in the existing fleet health alert folder and group.
 PromQL query A (instant):
 
 ```promql
-(fleet_deployment_last_attempt_status{host="pi"} == bool 0)
+(fleet_deployment_last_attempt_status == bool 0)
 +
 on(host)
 (
-  (fleet_deployment_last_attempt_status{host="pi"} == bool 2)
+  (fleet_deployment_last_attempt_status == bool 2)
   *
   on(host)
   (
-    (time() - fleet_deployment_last_attempt_timestamp_seconds{host="pi"})
+    (time() - fleet_deployment_last_attempt_timestamp_seconds)
       > bool 14400
   )
 )
@@ -59,7 +60,7 @@ on(host)
 ## Verification
 
 1. After deploying the Nix change, check that the next full-fleet attempt
-   generates both metrics in Grafana Explore, labeled `host="pi"`.
+   generates both metrics in Grafana Explore, labeled with the controller host.
    State `1` is healthy; `0` is failure; `2` is running.
 2. Create or update this exact rule in Grafana Cloud (this Markdown document
    is not automatically synchronized). Preview query A with the live metric.
