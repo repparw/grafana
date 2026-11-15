@@ -11,7 +11,7 @@ connection only manages `dashboards/`, not alert rules.
 Alloy textfile collector:
 
 - `fleet_deployment_last_attempt_status`: `2` while a full-fleet deploy
-  is running, `0` after failure, `1` after deploy-rs returns success.
+  is running, `1` after failure, `0` after deploy-rs returns success.
 - `fleet_deployment_last_attempt_timestamp_seconds`: last state transition,
   derived from the atomic status file's modification time.
 
@@ -29,7 +29,7 @@ metrics datasource, in the existing fleet health alert folder and group.
 PromQL query A (instant):
 
 ```promql
-(fleet_deployment_last_attempt_status == bool 0)
+(fleet_deployment_last_attempt_status == bool 1)
 +
 on(host)
 (
@@ -61,7 +61,7 @@ on(host)
 
 1. After deploying the Nix change, check that the next full-fleet attempt
    generates both metrics in Grafana Explore, labeled with the controller host.
-   State `1` is healthy; `0` is failure; `2` is running.
+   State `0` is healthy; `1` is failure; `2` is running.
 2. Create or update this exact rule in Grafana Cloud (this Markdown document
    is not automatically synchronized). Preview query A with the live metric.
 3. Verify the alert instance, notification policy, and recovery route.
